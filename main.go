@@ -42,7 +42,7 @@ func (i *ipamDriver) GetDefaultAddressSpaces() (*ipamApi.AddressSpacesResponse, 
 func (i *ipamDriver) RequestPool(r *ipamApi.RequestPoolRequest) (*ipamApi.RequestPoolResponse, error) {
 	// if !i.networkAllocated {
 	// FixMe: Check if pool with same subnet already exists
-	logrus.Infof("RequestPool called req:\n%+v\n", r)
+	// logrus.Infof("RequestPool called req:\n%+v\n", r)
 	if r.Pool == "" {
 		return &ipamApi.RequestPoolResponse{}, errors.New("Subnet is required")
 	}
@@ -87,7 +87,13 @@ func (i *ipamDriver) RequestAddress(r *ipamApi.RequestAddressRequest) (*ipamApi.
 	rFormatted := scs.Sdump(r)
 	logrus.Infof(rFormatted)
 
-	addr := i.getNextIP(r.PoolID)
+	addr := ""
+	if r.Address != "" {
+		addr = r.Address
+	} else {
+		return &ipamApi.RequestAddressResponse{}, errors.New("IP is required")
+		// addr = i.getNextIP(r.PoolID)
+	}
 	addr = fmt.Sprintf("%s/%s", addr, "24")
 	logrus.Infof("Allocated IP %s", addr)
 	return &ipamApi.RequestAddressResponse{Address: addr}, nil
