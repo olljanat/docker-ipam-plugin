@@ -9,10 +9,11 @@ import (
 	"net"
 )
 
-const socketAddress = "/run/docker/plugins/sdip.sock"
+// const socketAddress = "/run/docker/plugins/sdip.sock"
+const pluginName = "sdip"
 const localAddressSpace = "LOCAL"
 const globalAddressSpace = "GLOBAL"
-const localAddressPool = "192.168.10.2/24"
+const localAddressPool = "192.168.10.0/24"
 
 var scs = spew.ConfigState{Indent: "  "}
 
@@ -38,7 +39,7 @@ func (i *ipamDriver) GetDefaultAddressSpaces() (*ipamApi.AddressSpacesResponse, 
 
 func (i *ipamDriver) RequestPool(r *ipamApi.RequestPoolRequest) (*ipamApi.RequestPoolResponse, error) {
 	if !i.networkAllocated {
-		logrus.Infof("RequestPool called")
+		logrus.Infof("RequestPool called req:\n%+v\n", r)
 
 		rFormatted := scs.Sdump(r)
 		logrus.Infof(rFormatted)
@@ -51,7 +52,7 @@ func (i *ipamDriver) RequestPool(r *ipamApi.RequestPoolRequest) (*ipamApi.Reques
 }
 
 func (i *ipamDriver) ReleasePool(r *ipamApi.ReleasePoolRequest) error {
-	logrus.Infof("ReleasePool called")
+	logrus.Infof("ReleasePool called req:\n%+v\n", r)
 
 	rFormatted := scs.Sdump(r)
 	logrus.Infof(rFormatted)
@@ -65,7 +66,7 @@ func (i *ipamDriver) ReleasePool(r *ipamApi.ReleasePoolRequest) error {
 }
 
 func (i *ipamDriver) RequestAddress(r *ipamApi.RequestAddressRequest) (*ipamApi.RequestAddressResponse, error) {
-	logrus.Infof("RequestAddress called")
+	logrus.Infof("RequestAddress called req:\n%+v\n", r)
 
 	rFormatted := scs.Sdump(r)
 	logrus.Infof(rFormatted)
@@ -77,7 +78,7 @@ func (i *ipamDriver) RequestAddress(r *ipamApi.RequestAddressRequest) (*ipamApi.
 }
 
 func (i *ipamDriver) ReleaseAddress(r *ipamApi.ReleaseAddressRequest) error {
-	logrus.Infof("ReleaseAddress called")
+	logrus.Infof("ReleaseAddress called req:\n%+v\n", r)
 
 	rFormatted := scs.Sdump(r)
 	logrus.Infof(rFormatted)
@@ -118,6 +119,6 @@ func main() {
 	logrus.Infof("Starting Docker IPAM Plugin")
 	i := &ipamDriver{allocatedIPAddresses: make(map[string]struct{})}
 	h := ipamApi.NewHandler(i)
-	logrus.Infof("Listening on socket %s", socketAddress)
-	h.ServeUnix(socketAddress, 0)
+	// logrus.Infof("Listening on socket %s", sdip)
+	h.ServeUnix(pluginName, 0)
 }
