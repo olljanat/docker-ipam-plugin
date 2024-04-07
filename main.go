@@ -13,13 +13,15 @@ import (
 const pluginName = "sdip"
 const localAddressSpace = "LOCAL"
 const globalAddressSpace = "GLOBAL"
-const localAddressPool = "192.168.10.0/24"
 
 var scs = spew.ConfigState{Indent: "  "}
 
-type ipamDriver struct {
+type pool struct {
 	allocatedIPAddresses map[string]struct{}
-	networkAllocated     bool
+}
+
+type ipamDriver struct {
+	pools map[string]*pool
 }
 
 func (i *ipamDriver) GetCapabilities() (*ipamApi.CapabilitiesResponse, error) {
@@ -38,17 +40,28 @@ func (i *ipamDriver) GetDefaultAddressSpaces() (*ipamApi.AddressSpacesResponse, 
 }
 
 func (i *ipamDriver) RequestPool(r *ipamApi.RequestPoolRequest) (*ipamApi.RequestPoolResponse, error) {
-	if !i.networkAllocated {
-		logrus.Infof("RequestPool called req:\n%+v\n", r)
-
-		rFormatted := scs.Sdump(r)
-		logrus.Infof(rFormatted)
-
-		logrus.Infof("Pool: %s", localAddressPool)
-		i.networkAllocated = true
-		return &ipamApi.RequestPoolResponse{PoolID: "1234", Pool: localAddressPool}, nil
+	// if !i.networkAllocated {
+	// FixMe: Check if pool with same subnet already exists
+	logrus.Infof("RequestPool called req:\n%+v\n", r)
+	if r.Pool == "" {
+		return &ipamApi.RequestPoolResponse{}, errors.New("Subnet is required")
 	}
-	return &ipamApi.RequestPoolResponse{}, errors.New("Pool Already Allocated")
+
+	rFormatted := scs.Sdump(r)
+	logrus.Infof(rFormatted)
+
+	// i.networkAllocated = true
+	ipPool := &pool{
+		allocatedIPAddresses: make(map[string]struct{}),
+	}
+	i.pools[r.Pool] = ipPool
+	
+	// Reserve subnet IP so gateway will get IP .1
+	i.getNextIP(r.Pool)
+
+	return &ipamApi.RequestPoolResponse{PoolID: r.Pool, Pool: r.Pool}, nil
+	// }
+	// return &ipamApi.RequestPoolResponse{}, errors.New("Pool Already Allocated")
 }
 
 func (i *ipamDriver) ReleasePool(r *ipamApi.ReleasePoolRequest) error {
@@ -57,11 +70,11 @@ func (i *ipamDriver) ReleasePool(r *ipamApi.ReleasePoolRequest) error {
 	rFormatted := scs.Sdump(r)
 	logrus.Infof(rFormatted)
 
-	if r.PoolID == "1234" {
-		logrus.Infof("Releasing Pool")
-		i.networkAllocated = false
-		i.allocatedIPAddresses = make(map[string]struct{})
-	}
+	// if r.PoolID == "1234" {
+	logrus.Infof("Releasing Pool")
+	// i.networkAllocated = false
+	i.pools[r.PoolID].allocatedIPAddresses = make(map[string]struct{})
+	//}
 	return nil
 }
 
@@ -71,7 +84,7 @@ func (i *ipamDriver) RequestAddress(r *ipamApi.RequestAddressRequest) (*ipamApi.
 	rFormatted := scs.Sdump(r)
 	logrus.Infof(rFormatted)
 
-	addr := i.getNextIP()
+	addr := i.getNextIP(r.PoolID)
 	addr = fmt.Sprintf("%s/%s", addr, "24")
 	logrus.Infof("Allocated IP %s", addr)
 	return &ipamApi.RequestAddressResponse{Address: addr}, nil
@@ -83,21 +96,21 @@ func (i *ipamDriver) ReleaseAddress(r *ipamApi.ReleaseAddressRequest) error {
 	rFormatted := scs.Sdump(r)
 	logrus.Infof(rFormatted)
 
-	delete(i.allocatedIPAddresses, r.Address)
-	if _, ok := i.allocatedIPAddresses[r.Address]; !ok {
+	delete(i.pools[r.PoolID].allocatedIPAddresses, r.Address)
+	if _, ok := i.pools[r.PoolID].allocatedIPAddresses[r.Address]; !ok {
 		logrus.Infof("IP %s Released from the Pool", r.Address)
 	}
 	return nil
 }
 
-func (i *ipamDriver) getNextIP() string {
-	ipAddr, ipNet, _ := net.ParseCIDR(localAddressPool)
+func (i *ipamDriver) getNextIP(pool string) string {
+	ipAddr, ipNet, _ := net.ParseCIDR(pool)
 
 	ret := ""
 	for ip := ipAddr; ipNet.Contains(ip); incrementIP(ip) {
-		if _, ok := i.allocatedIPAddresses[ip.String()]; !ok {
+		if _, ok := i.pools[pool].allocatedIPAddresses[ip.String()]; !ok {
 			ret = ip.String()
-			i.allocatedIPAddresses[ret] = struct{}{}
+			i.pools[pool].allocatedIPAddresses[ret] = struct{}{}
 			break
 		}
 	}
@@ -117,7 +130,7 @@ func incrementIP(ip net.IP) {
 
 func main() {
 	logrus.Infof("Starting Docker IPAM Plugin")
-	i := &ipamDriver{allocatedIPAddresses: make(map[string]struct{})}
+	i := &ipamDriver{pools: make(map[string]*pool)}
 	h := ipamApi.NewHandler(i)
 	// logrus.Infof("Listening on socket %s", sdip)
 	h.ServeUnix(pluginName, 0)
