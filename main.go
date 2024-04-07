@@ -26,7 +26,7 @@ type ipamDriver struct {
 
 func (i *ipamDriver) GetCapabilities() (*ipamApi.CapabilitiesResponse, error) {
 	logrus.Infof("GetCapabilities called")
-	return &ipamApi.CapabilitiesResponse{RequiresMACAddress: true}, nil
+	return &ipamApi.CapabilitiesResponse{RequiresMACAddress: false}, nil
 }
 
 func (i *ipamDriver) GetDefaultAddressSpaces() (*ipamApi.AddressSpacesResponse, error) {
@@ -42,7 +42,7 @@ func (i *ipamDriver) GetDefaultAddressSpaces() (*ipamApi.AddressSpacesResponse, 
 func (i *ipamDriver) RequestPool(r *ipamApi.RequestPoolRequest) (*ipamApi.RequestPoolResponse, error) {
 	// if !i.networkAllocated {
 	// FixMe: Check if pool with same subnet already exists
-	// logrus.Infof("RequestPool called req:\n%+v\n", r)
+	logrus.Infof("RequestPool called req:\n%+v\n", r)
 	if r.Pool == "" {
 		return &ipamApi.RequestPoolResponse{}, errors.New("Subnet is required")
 	}
@@ -91,8 +91,11 @@ func (i *ipamDriver) RequestAddress(r *ipamApi.RequestAddressRequest) (*ipamApi.
 	if r.Address != "" {
 		addr = r.Address
 	} else {
-		return &ipamApi.RequestAddressResponse{}, errors.New("IP is required")
-		// addr = i.getNextIP(r.PoolID)
+		if r.Options["RequestAddressType"] == "com.docker.network.gateway" || r.Options["com.docker.network.ipam.serial"] == "true" {
+			addr = i.getNextIP(r.PoolID)
+		} else {
+			return &ipamApi.RequestAddressResponse{}, errors.New("IP is required")
+		}
 	}
 	addr = fmt.Sprintf("%s/%s", addr, "24")
 	logrus.Infof("Allocated IP %s", addr)
