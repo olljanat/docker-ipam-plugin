@@ -81,7 +81,9 @@ func (i *ipamDriver) RequestAddress(r *ipamApi.RequestAddressRequest) (*ipamApi.
 			}
 			address = i.v6gateway[r.PoolID]
 		} else {
-			return &ipamApi.RequestAddressResponse{}, errors.New("IPv6 is required")
+			if r.Address == "" {
+				return &ipamApi.RequestAddressResponse{}, errors.New("IPv6 is required")
+			}
 		}
 	}
 
