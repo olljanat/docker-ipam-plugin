@@ -73,7 +73,10 @@ func (i *ipamDriver) ReleasePool(r *ipamApi.ReleasePoolRequest) error {
 	// if r.PoolID == "1234" {
 	logrus.Infof("Releasing Pool")
 	// i.networkAllocated = false
-	i.pools[r.PoolID].allocatedIPAddresses = make(map[string]struct{})
+	if i.pools[r.PoolID] != nil {
+		//i.pools[r.PoolID].allocatedIPAddresses = make(map[string]struct{})
+		delete(i.pools, r.PoolID)
+	}
 	//}
 	return nil
 }
@@ -96,9 +99,11 @@ func (i *ipamDriver) ReleaseAddress(r *ipamApi.ReleaseAddressRequest) error {
 	rFormatted := scs.Sdump(r)
 	logrus.Infof(rFormatted)
 
-	delete(i.pools[r.PoolID].allocatedIPAddresses, r.Address)
-	if _, ok := i.pools[r.PoolID].allocatedIPAddresses[r.Address]; !ok {
-		logrus.Infof("IP %s Released from the Pool", r.Address)
+	if i.pools[r.PoolID] != nil {
+		delete(i.pools[r.PoolID].allocatedIPAddresses, r.Address)
+		if _, ok := i.pools[r.PoolID].allocatedIPAddresses[r.Address]; !ok {
+			logrus.Infof("IP %s Released from the Pool", r.Address)
+		}
 	}
 	return nil
 }
